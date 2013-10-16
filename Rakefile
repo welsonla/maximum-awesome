@@ -1,3 +1,5 @@
+ENV['HOMEBREW_CASK_OPTS'] = "--appdir=/Applications"
+
 def brew_install(package, *options)
   `brew list #{package}`
   return if $?.success?
@@ -9,6 +11,13 @@ def install_github_bundle(user, package)
   unless File.exist? File.expand_path("~/.vim/bundle/#{package}")
     sh "git clone https://github.com/#{user}/#{package} ~/.vim/bundle/#{package}"
   end
+end
+
+def brew_cask_install(package, *options)
+  output = `brew cask info #{package}`
+  return unless output.include?('Not installed')
+
+  sh "brew cask install #{package} #{options.join ' '}"
 end
 
 def step(description)
@@ -75,6 +84,16 @@ namespace :install do
     end
   end
 
+  desc 'Install Homebrew Cask'
+  task :brew_cask do
+    step 'Homebrew Cask'
+    unless system('brew tap | grep phinze/cask > /dev/null') || system('brew tap phinze/homebrew-cask')
+      abort "Failed to tap phinze/homebrew-cask in Homebrew."
+    end
+
+    brew_install 'brew-cask'
+  end
+
   desc 'Install The Silver Searcher'
   task :the_silver_searcher do
     step 'the_silver_searcher'
@@ -85,12 +104,7 @@ namespace :install do
   task :iterm do
     step 'iterm2'
     unless app? 'iTerm'
-      system <<-SHELL
-        curl -L -o iterm.zip http://iterm2.googlecode.com/files/iTerm2-1_0_0_20120203.zip && \
-          unzip iterm.zip && \
-          mv iTerm.app /Applications && \
-          rm iterm.zip
-      SHELL
+      brew_cask_install 'iterm2'
     end
   end
 
@@ -116,13 +130,7 @@ namespace :install do
   task :macvim do
     step 'MacVim'
     unless app? 'MacVim'
-      system <<-SHELL
-        curl -L -o macvim.tbz https://github.com/downloads/b4winckler/macvim/MacVim-snapshot-64.tbz && \
-          bunzip2 macvim.tbz && tar xf macvim.tar && \
-          mv MacVim-snapshot-64/MacVim.app /Applications && \
-          rm -rf macvim.tbz macvim.tar MacVim-snapshot-64
-      SHELL
-      system ''
+      brew_cask_install 'macvim'
     end
 
     bin_vim = File.expand_path('~/bin/vim')
@@ -148,15 +156,13 @@ end
 desc 'Install these config files.'
 task :default do
   Rake::Task['install:brew'].invoke
+  Rake::Task['install:brew_cask'].invoke
   Rake::Task['install:the_silver_searcher'].invoke
   Rake::Task['install:iterm'].invoke
   Rake::Task['install:ctags'].invoke
   Rake::Task['install:reattach_to_user_namespace'].invoke
   Rake::Task['install:tmux'].invoke
   Rake::Task['install:macvim'].invoke
-
-  step 'git submodules'
-  sh 'git submodule update --init'
 
   # TODO install gem ctags?
   # TODO run gem ctags?
